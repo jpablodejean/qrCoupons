@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Scanner</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+            font-family: Arial, sans-serif;
+        }
+
+        #qr-video {
+            width: 80%;
+            max-width: 400px;
+            margin-bottom: 20px;
+        }
+
+        #qr-reader-results {
+            font-size: 20px;
+            text-align: center;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0px 0px 5px 0px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <video id="qr-video" playsinline autoplay></video>
+    <div id="qr-reader-results">Scanning...</div>
+
+    <!-- Add audio elements for different messages -->
+    <audio id="successAudio">
+        <source src="audio/success.webm" type="audio/webm">
+    </audio>
+    <audio id="wrongAudio">
+        <source src="audio/wrong.webm" type="audio/webm">
+    </audio>
+    <audio id="superWrongAudio">
+        <source src="audio/superwrong.webm" type="audio/webm">
+    </audio>
+
+    <script src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
+    <script>
+        var resultContainer = document.getElementById('qr-reader-results');
+        var lastResult, countResults = 0;
+
+        // Function to play audio based on message
+        function playAudio(audioId) {
+            var audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.play();
+            }
+        }
+
+        // Initialize Instascan
+        let scanner = new Instascan.Scanner({ video: document.getElementById('qr-video') });
+        scanner.addListener('scan', function (content) {
+            if (content !== lastResult) {
+                lastResult = content;
+                // Check if the code is already redeemed
+                fetch('couponreader.php', {
+                    method: 'POST',
+                    body: JSON.stringify({ code: content }),
+                })
+                .then(response => response.text())
+                .then(result => {
+                    resultContainer.textContent = result;
+                    console.log(result);
+
+                    // Play the appropriate audio based on the message and set background color
+                    if (result.includes("Coupon code redeemed")) {
+                        playAudio('successAudio');
+                        resultContainer.style.backgroundColor = '#4CAF50'; // Green background for success
+                    } else if (result.includes("This code has already been used")) {
+                        playAudio('wrongAudio');
+                        resultContainer.style.backgroundColor = '#FF5722'; // Red background for error
+                    } else if (result.includes("This code is not valid")) {
+                        playAudio('superWrongAudio');
+                        resultContainer.style.backgroundColor = '#333'; // Dark gray background for not valid
+                    }
+                })
+                .catch(error => {
+                    resultContainer.textContent = `Error: ${error.message}`;
+                    console.error(error);
+                });
+            }
+        });
+
+        // Fetch the list of available cameras
+        Instascan.Camera.getCameras().then(function (cameras) {
+            if (cameras.length > 0) {
+                // If there are cameras available, use the first one (which is usually the rear camera)
+                scanner.start(cameras[0]);
+            } else {
+                console.error('No cameras found.');
+            }
+        });
+    </script>
+</body>
+</html>
